@@ -1,0 +1,18 @@
+🔗 Found pyo3 bindings with abi3 support for Python ≥ 3.9
+🐍 Not using a specific python interpreter
+error: linking with `cc` failed: exit status: 1
+  |
+  = note: LC_ALL="C" PATH="/root/.rustup/toolchains/1.85.0-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin:/root/.cargo/bin:/workspace/scratch/f059566d8cbf/work/rust_tokenizer-main/.venv/bin:/root/.cargo/bin:/root/.codex/tmp/arg0/codex-arg0pI1RY8:/opt/codex/codex-path:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/override:/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/fallback" VSLANG="1033" "cc" "-Wl,--version-script=/tmp/rustcNDjASu/list" "-Wl,--no-undefined-version" "-m64" "/tmp/rustcNDjASu/symbols.o" "<48 object files omitted>" "-Wl,--as-needed" "-Wl,-Bstatic" "/root/.rustup/toolchains/1.85.0-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/{libcompiler_builtins-1af05515ab19524a.rlib}" "-Wl,-Bdynamic" "-lgcc_s" "-lutil" "-lrt" "-lpthread" "-lm" "-ldl" "-lc" "-Wl,--eh-frame-hdr" "-Wl,-z,noexecstack" "-L" "/root/.rustup/toolchains/1.85.0-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib" "-o" "/workspace/scratch/f059566d8cbf/work/rust_tokenizer-main/target/release/deps/librust_tokenizer.so" "-Wl,--gc-sections" "-shared" "-Wl,-z,relro,-z,now" "-Wl,-O1" "-Wl,--strip-debug" "-nodefaultlibs"
+  = note: some arguments are omitted. use `--verbose` to show all linker arguments
+  = note: /usr/bin/ld: /workspace/scratch/f059566d8cbf/work/rust_tokenizer-main/target/release/deps/rust_tokenizer.aho_corasick-4877988b7f3fa6e7.aho_corasick.b41faaa7bc371424-cgu.0.rcgu.o.rcgu.o: in function `<bool as core::fmt::Debug>::fmt':
+          aho_corasick.b41faaa7bc371424-cgu.0:(.text._ZN41_$LT$bool$u20$as$u20$core..fmt..Debug$GT$3fmt17h20e59a804a8c9e74E+0xb): undefined reference to `anon.2efdfdcfdad50f2e8503dc20ce1f0eba.310.llvm.13122709607692974721'
+          /usr/bin/ld: /workspace/scratch/f059566d8cbf/work/rust_tokenizer-main/target/release/deps/rust_tokenizer.aho_corasick-4877988b7f3fa6e7.aho_corasick.b41faaa7bc371424-cgu.0.rcgu.o.rcgu.o: relocation R_X86_64_PC32 against undefined hidden symbol `anon.2efdfdcfdad50f2e8503dc20ce1f0eba.310.llvm.13122709607692974721' can not be used when making a shared object
+          /usr/bin/ld: final link failed: bad value
+          collect2: error: ld returned 1 exit status
+          
+  = note: some `extern` functions couldn't be found; some native libraries may need to be installed or have their path specified
+  = note: use the `-l` flag to specify native libraries to link
+  = note: use the `cargo:rustc-link-lib` directive to specify the native libraries to link with Cargo (see https://doc.rust-lang.org/cargo/reference/build-scripts.html#rustc-link-lib)
+
+    Finished `release` profile [optimized] target(s) in 0.02s
+📦 Built wheel for abi3 Python ≥ 3.9 to dist/rust_tokenizer_baseline-0.2.0-cp39-abi3-manylinux_2_34_x86_64.whl

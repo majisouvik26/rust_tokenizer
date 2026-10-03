@@ -1,0 +1,12 @@
+{"fresh_processes": 20, "unique_models": 1, "model_sha256": "3c8fc29120c29d6f50837deecc9476b39fce0f833552280a9a8cc82129670da2"}
+   Compiling syn v2.0.119
+   Compiling serde_derive v1.0.218
+   Compiling serde v1.0.218
+   Compiling thiserror-impl v2.0.11
+   Compiling clap_derive v4.5.28
+   Compiling serde_json v1.0.139
+   Compiling thiserror v2.0.11
+   Compiling bpe v0.2.0 (/workspace/scratch/f059566d8cbf/work/rust_tokenizer-main/bpe)
+   Compiling clap v4.5.31
+   Compiling bpe-cli v0.2.0 (/workspace/scratch/f059566d8cbf/work/rust_tokenizer-main/bpe-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.56s

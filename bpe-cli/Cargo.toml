@@ -1,0 +1,11 @@
+[package]
+name = "bpe-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+bpe.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true

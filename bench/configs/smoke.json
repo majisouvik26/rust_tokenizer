@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "model": "models/gpt2.json",
+  "fixtures": "fixtures/gpt2.jsonl",
+  "max_documents": 512,
+  "process_runs": 5,
+  "iterations": 5,
+  "output": "results/day1-smoke",
+  "engines": ["rust_reference_native", "rust_reference_python", "tiktoken", "huggingface"]
+}

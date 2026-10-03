@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "cases": 10000,
+  "seed": 42,
+  "fixture_sha256": "6a5ce6e8aa1c6fde5f4af91cb648d3cc00c455131ca5738d82b88b1956a8d16e",
+  "model_file_sha256": "4a9f17ef696117ea8600528209f9fee255bbc6055420bb01c0d66ec08615cb72",
+  "generator_sha256": "25bf3cb6eb586dc348a8a170867e79ae62fea7ef7e19b4d5e6b98483f002688a",
+  "versions": {
+    "tiktoken": "0.9.0",
+    "tokenizers": "0.21.1",
+    "regex": "2024.11.6"
+  },
+  "settings": {
+    "special": "ordinary",
+    "prefix_space": false,
+    "add_special_tokens": false,
+    "hf_cache_capacity": 0
+  },
+  "data_kind": "fixed and seeded synthetic cases; not a representative performance corpus",
+  "production_mismatches": 0
+}

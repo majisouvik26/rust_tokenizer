@@ -1,0 +1,19 @@
+{
+  "model_sha256": "4a9f17ef696117ea8600528209f9fee255bbc6055420bb01c0d66ec08615cb72",
+  "sources": {
+    "encoder.json": {
+      "url": "https://openaipublic.blob.core.windows.net/gpt-2/models/124M/encoder.json",
+      "sha256": "196139668be63f3b5d6574427317ae82f612a97c5d1cdaf36ed2256dbf636783"
+    },
+    "vocab.bpe": {
+      "url": "https://openaipublic.blob.core.windows.net/gpt-2/models/124M/vocab.bpe",
+      "sha256": "1ce1664773c50f3e0cc8842619a93edc4624525b728b188a9e0be33b7726adc5"
+    }
+  },
+  "ordinary_tokens": 50256,
+  "merges": 50000,
+  "special_tokens": {
+    "<|endoftext|>": 50256
+  },
+  "license": "OpenAI GPT-2 MIT (see licenses/GPT2-MIT.txt)"
+}

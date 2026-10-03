@@ -1,0 +1,15 @@
+[package]
+name = "bpe-python"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "rust_tokenizer"
+crate-type = ["cdylib"]
+test = false
+doctest = false
+
+[dependencies]
+bpe.workspace = true
+pyo3.workspace = true

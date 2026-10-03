@@ -1,62 +1,66 @@
-# Rust Tokenizer
+# Rust BPE Tokenizer 
 
-A basic [Byte Pair Encoding (BPE)](https://en.wikipedia.org/wiki/Byte_pair_encoding) tokenizer implemented in Rust. This project provides a foundational implementation for tokenizing text using custom merge operations and vocabulary management. It is designed to be modular, efficient, and easily extendable for industry-grade NLP applications.
+A lossless byte BPE tokenizer with deterministic training and a readable scan
+encoder. GPT-2 import preserves the original token IDs. This is the first
+reference milestone of the project; optimization and the hosted demo belong to later days.
 
-## Features
-
-- **Basic BPE Implementation:** Encode text into token IDs and decode them back to strings.
-- **Custom Vocabulary & Merges:** Dynamically build vocabularies and define merge rules.
-- **Error Handling:** Basic error management for out-of-vocabulary tokens and token ID mismatches.
-- **Modular Structure:** Separated modules for models, training, and error definitions.
-- **Testing:** Includes unit and integration tests to ensure basic functionality.
-
-## Getting Started
-
-### Prerequisites
-
-- [Rust](https://www.rust-lang.org/) (Edition 2021 or later)
-- Cargo (Rust’s package manager)
-
-### Installation
-
-Clone the repository and build the project:
+## Quick start
 
 ```bash
-git clone https://github.com/yourusername/rust_tokenizer.git
-cd rust_tokenizer/bpe
-cargo build
+cargo test --workspace --locked
+cargo run --release --locked -p bpe-cli -- train \
+  --input data/toy.jsonl --pretokenizer raw --vocab-size 258 --out model.json
+cargo run --release --locked -p bpe-cli -- encode --model model.json --text "aaabbb"
+cargo run --release --locked -p bpe-cli -- inspect --model model.json
+printf '[256,97,257,98]' | cargo run --release --locked -p bpe-cli -- decode --model model.json
 ```
 
-### Usage
+The toy encodes to `[256,97,257,98]` and decodes to `aaabbb`. Encoding accepts
+`--input text.txt`, `--input records.jsonl --jsonl`, or stdin. Decoding accepts a
+JSON ID array from `--ids-file ids.json` or stdin and writes the exact text
+without adding a newline. Training records are JSONL objects `{"text":"..."}`;
+each record is independent. Empty/multilingual text, whitespace, NUL, and literal
+`</w>` are preserved.
 
-Run the basic implementation:
+## GPT-2 and the Day 1 gate
+
+The archive includes the pinned GPT-2 model, source artifacts, and 10,000 frozen
+fixtures. Regeneration requires Python baseline dependencies:
 
 ```bash
-cargo test
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --require-hashes -r requirements.lock
+python scripts/import_gpt2.py --out models/gpt2.json
+python scripts/generate_fixtures.py
+cargo run --release --locked -p bpe-cli -- encode --model models/gpt2.json --text "This is some text"
+python scripts/day1_gate.py
+python bench/run.py --config bench/configs/smoke.json
 ```
-This command executes all unit and integration tests, validating the functionality of the tokenizer.
 
-## Roadmap & Future Enhancements
+The GPT-2 example returns `[1212,318,617,2420]`. Specials are ordinary text by
+default; use `--special allow --allow-special '<|endoftext|>'` to recognize that
+token, or `--special reject` to reject recognized special strings.
 
-We have outlined several phases for further development:
+The gate builds and installs a release Python wheel, checks the same 10,000
+cases from Python, builds WASM, runs formatting/clippy/tests, and trains a toy
+model in 20 fresh processes. The benchmark records native Rust plus Rust Python,
+tiktoken, and Hugging Face timings with frozen ID preflight. Results are bounded
+synthetic smoke measurements, with no speed thresholds or production claims.
 
-- [ ] **Phase 1: Basic Functionality**
-  - Finalize and optimize the current implementation.
-  - Expand unit and integration tests.
-- [ ] **Phase 2: Enhanced Error Handling**
-  - Implement robust error handling for edge cases.
-  - Improve logging and detailed error messages.
-- [ ] **Phase 3: Advanced Tokenization Techniques**
-  - Extend the trainer with more sophisticated BPE algorithms.
-  - Introduce support for subword tokenization and dynamic vocabulary management.
-- [ ] **Phase 4: Industry-Ready Features**
-  - Optimize performance for large-scale corpora.
-  - Benchmark performance and integrate with popular NLP pipelines.
+```python
+from rust_tokenizer import Tokenizer
+tokenizer = Tokenizer("models/gpt2.json")
+ids = tokenizer.encode("বাংলা ও हिन्दी")
+assert tokenizer.decode_bytes(ids) == "বাংলা ও हिन्दी".encode("utf-8")
+```
 
-## Contributing
+## Project map
 
-Contributions are welcome! Please see the [CONTRIBUTING.md](https://github.com/majisouvik26/rust_tokenizer/blob/main/CONTRIBUTING.md) file for guidelines on how to get involved.
-
-## Contact
-
-For any inquiries or feedback, please contact me at [b22cs089@iitj.ac.in](mailto:b22cs089@iitj.ac.in).
+| Path | Purpose |
+| --- | --- |
+| `bpe/` | Validated model, preprocessing, special policy, scan encoder, trainer |
+| `bpe-cli/` | train / encode / decode / inspect; discovered CLI tests |
+| `bindings/` | Thin Python and single-threaded WASM adapters |
+| `scripts/` | Import, fixture generation, parity and reproducibility gates |
+| `fixtures/`, `models/` | Frozen IDs, preprocessing spans, hashes and GPT-2 sources |

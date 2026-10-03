@@ -1,111 +1,106 @@
-use std::collections::HashMap;
-use crate::{model::BpeModel, errors::TokenizerError};
+use crate::{
+    encode::reference::merge_pair, pretokenize, BpeModel, Merge, Pretokenizer, Result, Token,
+    TokenId, TokenizerError,
+};
+use base64::{engine::general_purpose::STANDARD, Engine};
+use std::collections::{BTreeMap, HashMap};
 
-pub struct BpeTrainer {
-    pub num_merges: usize,
+#[derive(Debug, Clone)]
+pub struct TrainConfig {
+    pub vocab_size: usize,
+    pub min_frequency: u64,
+    pub pretokenizer: Pretokenizer,
 }
-
+impl Default for TrainConfig {
+    fn default() -> Self {
+        Self {
+            vocab_size: 8192,
+            min_frequency: 2,
+            pretokenizer: Pretokenizer::gpt2(),
+        }
+    }
+}
+pub struct BpeTrainer {
+    config: TrainConfig,
+}
 impl BpeTrainer {
-    pub fn new(num_merges: usize) -> Self {
-        BpeTrainer { num_merges }
+    pub fn new(config: TrainConfig) -> Self {
+        Self { config }
     }
-
-    pub fn train(&self, corpus: &str) -> Result<BpeModel, TokenizerError> {
-        let mut words = self.preprocess(corpus);
-        let mut model = BpeModel::new();
-        self.initialize_vocab(&mut model, &words)?;
-
-        for _ in 0..self.num_merges {
-            let pairs = self.count_pairs(&words);
-            if pairs.is_empty() {
-                break;
-            }
-
-            let max_pair = pairs.into_iter()
-                .max_by_key(|&(_, count)| count)
-                .map(|(pair, _)| pair)
-                .ok_or(TokenizerError::VocabError("No pairs found".into()))?;
-
-            self.merge_pair(&max_pair, &mut words);
-            model.add_merge(max_pair);
+    pub fn train<S: AsRef<str>>(&self, records: &[S]) -> Result<BpeModel> {
+        if !(256..=u32::MAX as usize).contains(&self.config.vocab_size)
+            || self.config.min_frequency == 0
+        {
+            return Err(TokenizerError::InvalidConfig(
+                "vocab_size must be >=256 and fit u32; min_frequency must be positive".into(),
+            ));
         }
-
-        Ok(model)
-    }
-
-    fn preprocess(&self, corpus: &str) -> Vec<Vec<String>> {
-        corpus.split_whitespace()
-            .map(|word| {
-                let mut chars: Vec<String> = word.chars().map(|c| c.to_string()).collect();
-                chars.push("</w>".to_string());
-                chars
-            })
-            .collect()
-    }
-
-    fn initialize_vocab(&self, model: &mut BpeModel, words: &[Vec<String>]) -> Result<(), TokenizerError> {
-        let mut vocab_set = std::collections::HashSet::new();
-        for word in words {
-            for token in word {
-                vocab_set.insert(token.clone());
+        let regex = pretokenize::compile(&self.config.pretokenizer)?;
+        // Weighted deduplication; never concatenate record boundaries.
+        let mut frequencies: BTreeMap<Vec<TokenId>, u64> = BTreeMap::new();
+        for record in records {
+            let text = record.as_ref();
+            for span in pretokenize::spans(text, regex.as_ref())? {
+                let ids = text.as_bytes()[span]
+                    .iter()
+                    .map(|byte| *byte as TokenId)
+                    .collect();
+                *frequencies.entry(ids).or_default() += 1;
             }
         }
-        for token in vocab_set {
-            let id = model.vocab.len() as u32;
-            model.vocab.insert(token.clone(), id);
-            model.id_to_token.insert(id, token);
-        }
-        Ok(())
-    }
-
-    fn count_pairs(&self, words: &[Vec<String>]) -> HashMap<(String, String), usize> {
-        let mut counts = HashMap::new();
-        for word in words {
-            for i in 0..word.len() - 1 {
-                let pair = (word[i].clone(), word[i + 1].clone());
-                *counts.entry(pair).or_insert(0) += 1;
-            }
-        }
-        counts
-    }
-
-    fn merge_pair(&self, pair: &(String, String), words: &mut [Vec<String>]) {
-        let merged_token = format!("{}{}", pair.0, pair.1);
-        for word in words.iter_mut() {
-            let mut i = 0;
-            while i < word.len() - 1 {
-                if word[i] == pair.0 && word[i + 1] == pair.1 {
-                    word.splice(i..i + 2, [merged_token.clone()]);
-                    i = 0; // Restart to check for new pairs
-                } else {
-                    i += 1;
+        let mut chunks: Vec<_> = frequencies.into_iter().collect();
+        let mut data = BpeModel::byte_only(self.config.pretokenizer.clone())?
+            .data()
+            .clone();
+        let mut bytes: Vec<Vec<u8>> = (0..=255).map(|byte| vec![byte]).collect();
+        let mut by_bytes: HashMap<Vec<u8>, TokenId> = bytes
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(id, bytes)| (bytes, id as TokenId))
+            .collect();
+        while data.tokens.len() < self.config.vocab_size {
+            let mut counts: BTreeMap<(TokenId, TokenId), u64> = BTreeMap::new();
+            for (ids, frequency) in &chunks {
+                for pair in ids.windows(2) {
+                    *counts.entry((pair[0], pair[1])).or_default() += frequency;
                 }
             }
+            let best = counts
+                .into_iter()
+                .min_by(|(a_pair, a_count), (b_pair, b_count)| {
+                    b_count.cmp(a_count).then_with(|| a_pair.cmp(b_pair))
+                });
+            let Some((pair, count)) = best else {
+                break;
+            };
+            if count < self.config.min_frequency {
+                break;
+            }
+            let mut joined = bytes[pair.0 as usize].clone();
+            joined.extend_from_slice(&bytes[pair.1 as usize]);
+            let out = if let Some(id) = by_bytes.get(&joined) {
+                *id
+            } else {
+                let id = data.tokens.len() as TokenId;
+                data.tokens.push(Token {
+                    id,
+                    bytes_b64: STANDARD.encode(&joined),
+                });
+                bytes.push(joined.clone());
+                by_bytes.insert(joined, id);
+                id
+            };
+            data.merges.push(Merge {
+                left: pair.0,
+                right: pair.1,
+                out,
+                rank: data.merges.len() as u32,
+            });
+            for (ids, _) in &mut chunks {
+                *ids = merge_pair(ids, pair, out);
+            }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_trainer() -> Result<(), TokenizerError> {
-        let corpus = "aaabbb";
-        let trainer = BpeTrainer::new(2);
-        let model = trainer.train(corpus)?;
-
-        assert_eq!(model.merges, vec![
-            ("a".to_string(), "a".to_string()),
-            ("b".to_string(), "b".to_string())
-        ]);
-
-        assert!(model.vocab.contains_key("aa"));
-        assert!(model.vocab.contains_key("bb"));
-
-        let encoded = model.encode(corpus)?;
-        let decoded = model.decode(&encoded)?;
-        assert_eq!(decoded, "aaabbb");
-        Ok(())
+        BpeModel::from_data(data)
     }
 }
