@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+
+"""Validate correctness, reproducibility, and build compatibility."""
 import hashlib
 import json
 import os

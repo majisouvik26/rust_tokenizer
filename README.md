@@ -22,7 +22,7 @@ without adding a newline. Training records are JSONL objects `{"text":"..."}`;
 each record is independent. Empty/multilingual text, whitespace, NUL, and literal
 `</w>` are preserved.
 
-## GPT-2 and the Day 1 gate
+## GPT-2
 
 The archive includes the pinned GPT-2 model, source artifacts, and 10,000 frozen
 fixtures. Regeneration requires Python baseline dependencies:
@@ -34,7 +34,7 @@ python -m pip install --require-hashes -r requirements.lock
 python scripts/import_gpt2.py --out models/gpt2.json
 python scripts/generate_fixtures.py
 cargo run --release --locked -p bpe-cli -- encode --model models/gpt2.json --text "This is some text"
-python scripts/day1_gate.py
+python scripts/validate_s1.py
 python bench/run.py --config bench/configs/smoke.json
 ```
 
