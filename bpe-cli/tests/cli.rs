@@ -73,7 +73,22 @@ fn selectable_trainers_trace_and_parallel_batch_agree() {
     let mut models = Vec::new();
     for trainer in ["reference", "incremental"] {
         let path = directory.join(format!("{trainer}.json"));
-        let output = run(&["train", "--input", "-", "--pretokenizer", "raw", "--vocab-size", "280", "--trainer", trainer, "--out", path.to_str().unwrap()], input);
+        let output = run(
+            &[
+                "train",
+                "--input",
+                "-",
+                "--pretokenizer",
+                "raw",
+                "--vocab-size",
+                "280",
+                "--trainer",
+                trainer,
+                "--out",
+                path.to_str().unwrap(),
+            ],
+            input,
+        );
         assert!(output.status.success(), "{:?}", output);
         models.push(std::fs::read(&path).unwrap());
     }
@@ -81,11 +96,47 @@ fn selectable_trainers_trace_and_parallel_batch_agree() {
     let path = directory.join("reference.json");
     let model = path.to_str().unwrap();
     let reference = run(&["encode", "--model", model, "--jsonl"], input);
-    let heap = run(&["encode", "--model", model, "--jsonl", "--backend", "heap", "--threads", "2", "--cache-capacity", "8"], input);
+    let heap = run(
+        &[
+            "encode",
+            "--model",
+            model,
+            "--jsonl",
+            "--backend",
+            "heap",
+            "--threads",
+            "2",
+            "--cache-capacity",
+            "8",
+        ],
+        input,
+    );
     assert!(reference.status.success() && heap.status.success());
     assert_eq!(reference.stdout, heap.stdout);
-    let a = run(&["trace", "--model", model, "--text", "abcabc", "--backend", "reference"], "");
-    let b = run(&["trace", "--model", model, "--text", "abcabc", "--backend", "heap"], "");
+    let a = run(
+        &[
+            "trace",
+            "--model",
+            model,
+            "--text",
+            "abcabc",
+            "--backend",
+            "reference",
+        ],
+        "",
+    );
+    let b = run(
+        &[
+            "trace",
+            "--model",
+            model,
+            "--text",
+            "abcabc",
+            "--backend",
+            "heap",
+        ],
+        "",
+    );
     assert!(a.status.success() && b.status.success());
     assert_eq!(a.stdout, b.stdout);
     std::fs::remove_dir_all(directory).unwrap();

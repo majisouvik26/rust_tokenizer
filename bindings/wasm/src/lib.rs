@@ -19,14 +19,35 @@ impl WasmTokenizer {
     pub fn encode(&self, text: &str) -> Result<Vec<u32>, JsValue> {
         self.inner.encode(text).map_err(error)
     }
-    pub fn encode_with(&self, text: &str, backend: &str, heap_threshold: Option<u32>) -> Result<Vec<u32>, JsValue> {
-        let options = EncodeOptions { backend: backend.parse().map_err(error)?, ..Default::default() };
-        let config = RuntimeConfig { heap_threshold: heap_threshold.map(|value| value as usize), ..Default::default() };
-        self.inner.session(config).map_err(error)?.encode(text, &options).map_err(error)
+    pub fn encode_with(
+        &self,
+        text: &str,
+        backend: &str,
+        heap_threshold: Option<u32>,
+    ) -> Result<Vec<u32>, JsValue> {
+        let options = EncodeOptions {
+            backend: backend.parse().map_err(error)?,
+            ..Default::default()
+        };
+        let config = RuntimeConfig {
+            heap_threshold: heap_threshold.map(|value| value as usize),
+            ..Default::default()
+        };
+        self.inner
+            .session(config)
+            .map_err(error)?
+            .encode(text, &options)
+            .map_err(error)
     }
     pub fn trace(&self, text: &str, backend: &str) -> Result<String, JsValue> {
-        let options = EncodeOptions { backend: backend.parse().map_err(error)?, ..Default::default() };
-        let trace = self.inner.trace(text, &options, &RuntimeConfig::default()).map_err(error)?;
+        let options = EncodeOptions {
+            backend: backend.parse().map_err(error)?,
+            ..Default::default()
+        };
+        let trace = self
+            .inner
+            .trace(text, &options, &RuntimeConfig::default())
+            .map_err(error)?;
         serde_json::to_string(&trace).map_err(|error| JsValue::from_str(&error.to_string()))
     }
     pub fn decode(&self, ids: &[u32]) -> Result<String, JsValue> {

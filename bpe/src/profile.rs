@@ -14,7 +14,12 @@ pub struct PhaseProfile {
 /// Ordinary-text only. Merge includes construction of per-piece ID vectors;
 /// output measures concatenating those vectors into a document result.
 /// Small per-piece timers add overhead: use for diagnosis, not throughput claims.
-pub fn measure(tokenizer: &Tokenizer, text: &str, backend: Backend, config: &RuntimeConfig) -> Result<PhaseProfile> {
+pub fn measure(
+    tokenizer: &Tokenizer,
+    text: &str,
+    backend: Backend,
+    config: &RuntimeConfig,
+) -> Result<PhaseProfile> {
     config.validate()?;
     let start = Instant::now();
     let spans = tokenizer.pretoken_spans(text)?;
@@ -37,7 +42,15 @@ pub fn measure(tokenizer: &Tokenizer, text: &str, backend: Backend, config: &Run
     let output_seconds = start.elapsed().as_secs_f64();
     let expected = tokenizer.encode(text)?;
     if ids != expected {
-        return Err(crate::TokenizerError::InvalidConfig("profile disagrees with reference IDs".into()));
+        return Err(crate::TokenizerError::InvalidConfig(
+            "profile disagrees with reference IDs".into(),
+        ));
     }
-    Ok(PhaseProfile { preprocessing_seconds, merge_seconds, output_seconds, pretokens: spans.len(), tokens: ids.len() })
+    Ok(PhaseProfile {
+        preprocessing_seconds,
+        merge_seconds,
+        output_seconds,
+        pretokens: spans.len(),
+        tokens: ids.len(),
+    })
 }

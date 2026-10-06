@@ -8,7 +8,12 @@ pub fn merge_pair(ids: &[TokenId], pair: (TokenId, TokenId), out: TokenId) -> Ve
     merged
 }
 
-pub(crate) fn merge_pair_into(ids: &[TokenId], pair: (TokenId, TokenId), out: TokenId, merged: &mut Vec<TokenId>) {
+pub(crate) fn merge_pair_into(
+    ids: &[TokenId],
+    pair: (TokenId, TokenId),
+    out: TokenId,
+    merged: &mut Vec<TokenId>,
+) {
     let mut i = 0;
     while i < ids.len() {
         if i + 1 < ids.len() && (ids[i], ids[i + 1]) == pair {

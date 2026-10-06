@@ -1,4 +1,7 @@
-use bpe::{Backend, BpeTrainer, EncodeOptions, Pretokenizer, RuntimeConfig, SpecialMode, Tokenizer, TrainConfig, TrainerBackend};
+use bpe::{
+    Backend, BpeTrainer, EncodeOptions, Pretokenizer, RuntimeConfig, SpecialMode, Tokenizer,
+    TrainConfig, TrainerBackend,
+};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::Deserialize;
 use std::{
@@ -33,7 +36,10 @@ enum Policy {
     Reject,
 }
 #[derive(Clone, Copy, ValueEnum)]
-enum Trainer { Reference, Incremental }
+enum Trainer {
+    Reference,
+    Incremental,
+}
 #[derive(Args)]
 struct RuntimeArgs {
     #[arg(long, default_value_t = 1)]
@@ -52,13 +58,22 @@ struct RuntimeArgs {
 }
 impl RuntimeArgs {
     fn config(&self) -> RuntimeConfig {
-        RuntimeConfig { heap_threshold: self.heap_threshold, cache_capacity: self.cache_capacity,
-            cache_bytes: self.cache_bytes, reuse_buffers: !self.no_reuse_buffers, ..Default::default() }
+        RuntimeConfig {
+            heap_threshold: self.heap_threshold,
+            cache_capacity: self.cache_capacity,
+            cache_bytes: self.cache_bytes,
+            reuse_buffers: !self.no_reuse_buffers,
+            ..Default::default()
+        }
     }
 }
 impl From<Engine> for Backend {
     fn from(engine: Engine) -> Self {
-        match engine { Engine::Reference => Self::Reference, Engine::Auto => Self::Auto, Engine::Heap => Self::Heap }
+        match engine {
+            Engine::Reference => Self::Reference,
+            Engine::Auto => Self::Auto,
+            Engine::Heap => Self::Heap,
+        }
     }
 }
 #[derive(Subcommand)]
@@ -179,13 +194,25 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 min_frequency,
                 pretokenizer,
             })
-            .train_with_report(&texts, match trainer { Trainer::Reference => TrainerBackend::Reference, Trainer::Incremental => TrainerBackend::Incremental })?;
+            .train_with_report(
+                &texts,
+                match trainer {
+                    Trainer::Reference => TrainerBackend::Reference,
+                    Trainer::Incremental => TrainerBackend::Incremental,
+                },
+            )?;
             let training_seconds = start.elapsed().as_secs_f64();
             model.save(&out)?;
-            let peak_rss_bytes = fs::read_to_string("/proc/self/status").ok().and_then(|status| {
-                status.lines().find(|line| line.starts_with("VmHWM:")).and_then(|line| line.split_whitespace().nth(1))
-                    .and_then(|value| value.parse::<u64>().ok()).map(|kb| kb * 1024)
-            });
+            let peak_rss_bytes = fs::read_to_string("/proc/self/status")
+                .ok()
+                .and_then(|status| {
+                    status
+                        .lines()
+                        .find(|line| line.starts_with("VmHWM:"))
+                        .and_then(|line| line.split_whitespace().nth(1))
+                        .and_then(|value| value.parse::<u64>().ok())
+                        .map(|kb| kb * 1024)
+                });
             println!(
                 "{}",
                 serde_json::json!({"vocab_size":model.vocab_size(), "merges":model.merges().len(), "model_sha256":model.sha256()?, "out":out, "training_seconds":training_seconds, "training_report":report, "peak_rss_bytes":peak_rss_bytes})
@@ -225,21 +252,52 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     println!("{}", serde_json::to_string(&ids)?);
                 }
             } else {
-                if runtime.threads != 1 { return Err("--threads requires --jsonl; one document remains serial".into()); }
+                if runtime.threads != 1 {
+                    return Err("--threads requires --jsonl; one document remains serial".into());
+                }
                 let mut session = tokenizer.session(runtime.config())?;
-                println!("{}", serde_json::to_string(&session.encode(&input, &options)?)?);
+                println!(
+                    "{}",
+                    serde_json::to_string(&session.encode(&input, &options)?)?
+                );
             }
         }
-        Command::Trace { model, text, backend, heap_threshold } => {
+        Command::Trace {
+            model,
+            text,
+            backend,
+            heap_threshold,
+        } => {
             let tokenizer = Tokenizer::load(model)?;
-            let options = EncodeOptions { backend: backend.into(), ..Default::default() };
-            let config = RuntimeConfig { heap_threshold, ..Default::default() };
-            println!("{}", serde_json::to_string(&tokenizer.trace(&text, &options, &config)?)?);
+            let options = EncodeOptions {
+                backend: backend.into(),
+                ..Default::default()
+            };
+            let config = RuntimeConfig {
+                heap_threshold,
+                ..Default::default()
+            };
+            println!(
+                "{}",
+                serde_json::to_string(&tokenizer.trace(&text, &options, &config)?)?
+            );
         }
-        Command::Profile { model, input, backend } => {
+        Command::Profile {
+            model,
+            input,
+            backend,
+        } => {
             let tokenizer = Tokenizer::load(model)?;
             let text = read(Some(&input))?;
-            println!("{}", serde_json::to_string(&bpe::profile::measure(&tokenizer, &text, backend.into(), &RuntimeConfig::default())?)?);
+            println!(
+                "{}",
+                serde_json::to_string(&bpe::profile::measure(
+                    &tokenizer,
+                    &text,
+                    backend.into(),
+                    &RuntimeConfig::default()
+                )?)?
+            );
         }
         Command::Decode {
             model,

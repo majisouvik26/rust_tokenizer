@@ -74,14 +74,15 @@ impl HeapScratch {
         self.heap.clear();
         self.round.clear();
         self.changed.clear();
-        self.nodes.extend(bytes.iter().enumerate().map(|(i, byte)| Node {
-            id: model.base_id(*byte),
-            prev: i.checked_sub(1),
-            next: (i + 1 < bytes.len()).then_some(i + 1),
-            end: i + 1,
-            generation: 0,
-            alive: true,
-        }));
+        self.nodes
+            .extend(bytes.iter().enumerate().map(|(i, byte)| Node {
+                id: model.base_id(*byte),
+                prev: i.checked_sub(1),
+                next: (i + 1 < bytes.len()).then_some(i + 1),
+                end: i + 1,
+                generation: 0,
+                alive: true,
+            }));
         for i in 0..self.nodes.len() {
             self.push(i, model);
         }
@@ -94,8 +95,13 @@ impl HeapScratch {
             // Freeze the whole selected-rank pass before adding new candidates.
             // Models can reuse an existing output ID: a merge may enable a lower
             // rank. The scan oracle still finishes this pass before that rank.
-            while self.heap.peek().is_some_and(|entry| entry.0.rank == first.rank) {
-                self.round.push(self.heap.pop().expect("peeked candidate").0);
+            while self
+                .heap
+                .peek()
+                .is_some_and(|entry| entry.0.rank == first.rank)
+            {
+                self.round
+                    .push(self.heap.pop().expect("peeked candidate").0);
             }
             self.changed.clear();
             for index in 0..self.round.len() {

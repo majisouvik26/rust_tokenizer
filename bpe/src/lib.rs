@@ -68,10 +68,14 @@ impl Default for RuntimeConfig {
 impl RuntimeConfig {
     pub(crate) fn validate(&self) -> Result<()> {
         if self.heap_threshold.is_some_and(|value| value < 2) {
-            return Err(TokenizerError::InvalidConfig("heap threshold must be at least two bytes".into()));
+            return Err(TokenizerError::InvalidConfig(
+                "heap threshold must be at least two bytes".into(),
+            ));
         }
         if self.cache_capacity > 0 && (self.cache_bytes == 0 || self.cache_max_piece_bytes == 0) {
-            return Err(TokenizerError::InvalidConfig("enabled cache needs positive byte and piece limits".into()));
+            return Err(TokenizerError::InvalidConfig(
+                "enabled cache needs positive byte and piece limits".into(),
+            ));
         }
         Ok(())
     }
@@ -84,12 +88,22 @@ pub(crate) struct WorkerState {
     cache: encode::Cache,
 }
 impl WorkerState {
-    pub(crate) fn stats(&self) -> CacheStats { self.cache.stats() }
-    pub(crate) fn clear_cache(&mut self) { self.cache.clear(); }
+    pub(crate) fn stats(&self) -> CacheStats {
+        self.cache.stats()
+    }
+    pub(crate) fn clear_cache(&mut self) {
+        self.cache.clear();
+    }
     fn finish(&mut self, config: &RuntimeConfig) {
-        let limit = if config.reuse_buffers { config.scratch_capacity_limit } else { 0 };
+        let limit = if config.reuse_buffers {
+            config.scratch_capacity_limit
+        } else {
+            0
+        };
         self.scratch.trim(limit);
-        if self.spans.capacity() > limit { self.spans = Vec::new(); }
+        if self.spans.capacity() > limit {
+            self.spans = Vec::new();
+        }
     }
 }
 
@@ -107,10 +121,15 @@ pub struct EncodingSession<'a> {
 }
 impl EncodingSession<'_> {
     pub fn encode(&mut self, text: &str, options: &EncodeOptions) -> Result<Vec<TokenId>> {
-        self.tokenizer.encode_state(text, options, &self.config, &mut self.state)
+        self.tokenizer
+            .encode_state(text, options, &self.config, &mut self.state)
     }
-    pub fn clear_cache(&mut self) { self.state.clear_cache(); }
-    pub fn cache_stats(&self) -> CacheStats { self.state.stats() }
+    pub fn clear_cache(&mut self) {
+        self.state.clear_cache();
+    }
+    pub fn cache_stats(&self) -> CacheStats {
+        self.state.stats()
+    }
 }
 
 impl Tokenizer {
@@ -121,21 +140,34 @@ impl Tokenizer {
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
         Self::new(BpeModel::load(path)?)
     }
-    pub fn model(&self) -> &BpeModel { &self.model }
+    pub fn model(&self) -> &BpeModel {
+        &self.model
+    }
     pub fn pretoken_spans(&self, text: &str) -> Result<Vec<Range<usize>>> {
         pretokenize::spans(text, self.regex.as_ref())
     }
     pub fn session(&self, config: RuntimeConfig) -> Result<EncodingSession<'_>> {
         config.validate()?;
-        Ok(EncodingSession { tokenizer: self, config, state: WorkerState::default() })
+        Ok(EncodingSession {
+            tokenizer: self,
+            config,
+            state: WorkerState::default(),
+        })
     }
     pub fn encode(&self, text: &str) -> Result<Vec<TokenId>> {
         self.encode_with(text, &EncodeOptions::default())
     }
     pub fn encode_with(&self, text: &str, options: &EncodeOptions) -> Result<Vec<TokenId>> {
-        self.session(RuntimeConfig::default())?.encode(text, options)
+        self.session(RuntimeConfig::default())?
+            .encode(text, options)
     }
-    pub(crate) fn encode_state(&self, text: &str, options: &EncodeOptions, config: &RuntimeConfig, state: &mut WorkerState) -> Result<Vec<TokenId>> {
+    pub(crate) fn encode_state(
+        &self,
+        text: &str,
+        options: &EncodeOptions,
+        config: &RuntimeConfig,
+        state: &mut WorkerState,
+    ) -> Result<Vec<TokenId>> {
         let result = (|| {
             let mut ids = Vec::new();
             for piece in special::split(text, self.model.special_tokens(), &options.special)? {
@@ -145,7 +177,8 @@ impl Tokenizer {
                         pretokenize::spans_into(ordinary, self.regex.as_ref(), &mut state.spans)?;
                         for span in &state.spans {
                             let bytes = &ordinary.as_bytes()[span.clone()];
-                            let cached = config.cache_capacity > 0 && bytes.len() <= config.cache_max_piece_bytes;
+                            let cached = config.cache_capacity > 0
+                                && bytes.len() <= config.cache_max_piece_bytes;
                             if cached {
                                 if let Some(tokens) = state.cache.get(bytes) {
                                     ids.extend_from_slice(tokens);
@@ -157,13 +190,24 @@ impl Tokenizer {
                             if config.reuse_buffers {
                                 state.scratch.encode(bytes, &self.model, backend, &mut ids);
                             } else if backend == Backend::Reference {
-                                let initial = bytes.iter().map(|byte| self.model.base_id(*byte)).collect();
+                                let initial =
+                                    bytes.iter().map(|byte| self.model.base_id(*byte)).collect();
                                 ids.extend(encode::reference::encode(initial, &self.model));
                             } else {
-                                encode::Scratch::default().encode(bytes, &self.model, backend, &mut ids);
+                                encode::Scratch::default().encode(
+                                    bytes,
+                                    &self.model,
+                                    backend,
+                                    &mut ids,
+                                );
                             }
                             if cached {
-                                state.cache.insert(bytes, &ids[start..], config.cache_capacity, config.cache_bytes);
+                                state.cache.insert(
+                                    bytes,
+                                    &ids[start..],
+                                    config.cache_capacity,
+                                    config.cache_bytes,
+                                );
                             }
                         }
                     }
@@ -175,18 +219,35 @@ impl Tokenizer {
         result
     }
     /// Serial, stable-order batch using one reusable worker.
-    pub fn encode_batch<S: AsRef<str>>(&self, texts: &[S], options: &EncodeOptions) -> Result<Vec<Vec<TokenId>>> {
-        if texts.is_empty() { self.encode_with("", options)?; }
+    pub fn encode_batch<S: AsRef<str>>(
+        &self,
+        texts: &[S],
+        options: &EncodeOptions,
+    ) -> Result<Vec<Vec<TokenId>>> {
+        if texts.is_empty() {
+            self.encode_with("", options)?;
+        }
         let mut session = self.session(RuntimeConfig::default())?;
-        texts.iter().map(|text| session.encode(text.as_ref(), options)).collect()
+        texts
+            .iter()
+            .map(|text| session.encode(text.as_ref(), options))
+            .collect()
     }
     pub fn batch_encoder(&self, threads: usize, config: RuntimeConfig) -> Result<BatchEncoder<'_>> {
         BatchEncoder::new(self, threads, config)
     }
     /// Tracing bypasses caches and records every actual merge, including on hits.
-    pub fn trace(&self, text: &str, options: &EncodeOptions, config: &RuntimeConfig) -> Result<trace::EncodingTrace> {
+    pub fn trace(
+        &self,
+        text: &str,
+        options: &EncodeOptions,
+        config: &RuntimeConfig,
+    ) -> Result<trace::EncodingTrace> {
         config.validate()?;
-        let mut trace = trace::EncodingTrace { ids: Vec::new(), events: Vec::new() };
+        let mut trace = trace::EncodingTrace {
+            ids: Vec::new(),
+            events: Vec::new(),
+        };
         let mut offset = 0;
         for piece in special::split(text, self.model.special_tokens(), &options.special)? {
             match piece {
@@ -197,7 +258,14 @@ impl Tokenizer {
                 special::Piece::Text(ordinary) => {
                     for span in self.pretoken_spans(ordinary)? {
                         let bytes = &ordinary.as_bytes()[span.clone()];
-                        encode::trace_piece(bytes, &self.model, encode::selected(options.backend, bytes.len(), config), offset + span.start, &mut trace.ids, &mut trace.events);
+                        encode::trace_piece(
+                            bytes,
+                            &self.model,
+                            encode::selected(options.backend, bytes.len(), config),
+                            offset + span.start,
+                            &mut trace.ids,
+                            &mut trace.events,
+                        );
                     }
                     offset += ordinary.len();
                 }
@@ -205,8 +273,12 @@ impl Tokenizer {
         }
         Ok(trace)
     }
-    pub fn decode_bytes(&self, ids: &[TokenId]) -> Result<Vec<u8>> { self.model.decode_bytes(ids) }
-    pub fn decode_utf8(&self, ids: &[TokenId]) -> Result<String> { self.model.decode_utf8(ids) }
+    pub fn decode_bytes(&self, ids: &[TokenId]) -> Result<Vec<u8>> {
+        self.model.decode_bytes(ids)
+    }
+    pub fn decode_utf8(&self, ids: &[TokenId]) -> Result<String> {
+        self.model.decode_utf8(ids)
+    }
     pub fn decode_lossy(&self, ids: &[TokenId]) -> Result<String> {
         Ok(String::from_utf8_lossy(&self.decode_bytes(ids)?).into_owned())
     }

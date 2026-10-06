@@ -307,9 +307,18 @@ fn serial_batch_and_auto_preserve_order() {
             .map(|t| tokenizer.encode(t).unwrap())
             .collect::<Vec<_>>()
     );
-    assert_eq!(tokenizer.encode_with("", &EncodeOptions {
-        backend: Backend::Heap, ..Default::default()
-    }).unwrap(), Vec::<u32>::new());
+    assert_eq!(
+        tokenizer
+            .encode_with(
+                "",
+                &EncodeOptions {
+                    backend: Backend::Heap,
+                    ..Default::default()
+                }
+            )
+            .unwrap(),
+        Vec::<u32>::new()
+    );
 }
 #[test]
 fn invalid_trainer_configuration_is_rejected() {

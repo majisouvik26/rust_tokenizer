@@ -39,10 +39,16 @@ pub(crate) fn spans(text: &str, regex: Option<&Regex>) -> Result<Vec<Range<usize
     Ok(spans)
 }
 
-pub(crate) fn spans_into(text: &str, regex: Option<&Regex>, spans: &mut Vec<Range<usize>>) -> Result<()> {
+pub(crate) fn spans_into(
+    text: &str,
+    regex: Option<&Regex>,
+    spans: &mut Vec<Range<usize>>,
+) -> Result<()> {
     spans.clear();
     let Some(regex) = regex else {
-        if !text.is_empty() { spans.push(0..text.len()); }
+        if !text.is_empty() {
+            spans.push(0..text.len());
+        }
         return Ok(());
     };
     let mut end = 0;

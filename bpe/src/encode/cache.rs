@@ -32,11 +32,16 @@ impl Cache {
         }
     }
     pub(crate) fn insert(&mut self, key: &[u8], ids: &[TokenId], capacity: usize, budget: usize) {
-        let cost = key.len().saturating_mul(2).saturating_add(ids.len().saturating_mul(4));
+        let cost = key
+            .len()
+            .saturating_mul(2)
+            .saturating_add(ids.len().saturating_mul(4));
         if capacity == 0 || cost > budget || self.entries.contains_key(key) {
             return;
         }
-        while self.entries.len() >= capacity || self.stats.payload_bytes.saturating_add(cost) > budget {
+        while self.entries.len() >= capacity
+            || self.stats.payload_bytes.saturating_add(cost) > budget
+        {
             let oldest = self.order.pop_front().expect("nonempty bounded cache");
             let removed = self.entries.remove(&oldest).expect("cached FIFO key");
             self.stats.payload_bytes -= oldest.len() * 2 + removed.len() * 4;
