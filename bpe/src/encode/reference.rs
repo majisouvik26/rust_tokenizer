@@ -4,6 +4,11 @@ use crate::{BpeModel, TokenId};
 /// reconsidered during this pass. Encoder and trainer share this primitive.
 pub fn merge_pair(ids: &[TokenId], pair: (TokenId, TokenId), out: TokenId) -> Vec<TokenId> {
     let mut merged = Vec::with_capacity(ids.len());
+    merge_pair_into(ids, pair, out, &mut merged);
+    merged
+}
+
+pub(crate) fn merge_pair_into(ids: &[TokenId], pair: (TokenId, TokenId), out: TokenId, merged: &mut Vec<TokenId>) {
     let mut i = 0;
     while i < ids.len() {
         if i + 1 < ids.len() && (ids[i], ids[i + 1]) == pair {
@@ -14,7 +19,6 @@ pub fn merge_pair(ids: &[TokenId], pair: (TokenId, TokenId), out: TokenId) -> Ve
             i += 1;
         }
     }
-    merged
 }
 
 /// Readable scan oracle: select lowest applicable rank, merge its occurrences,

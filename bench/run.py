@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from fixture_io import read_jsonl
+from protocol import source_snapshot
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def command(args, **kwargs):
@@ -22,8 +23,11 @@ def command(args, **kwargs):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=ROOT / "bench/configs/smoke.json")
+    parser.add_argument("--cpu-ready", action="store_true", help="confirm a quiet CPU for timing")
     args = parser.parse_args()
-    config = json.loads(args.config.read_text())
+    if not args.cpu_ready:
+        parser.error("timing requires --cpu-ready after choosing a quiet CPU")
+    config = json.loads(args.config.read_text(encoding="utf-8"))
     if config["schema_version"] != 1 or min(config["process_runs"], config["iterations"], config["max_documents"]) < 1:
         raise ValueError("invalid benchmark configuration")
     native = None
@@ -36,7 +40,9 @@ def main():
         if not native:
             raise RuntimeError("native benchmark executable missing")
     output = ROOT / config["output"]
-    output.mkdir(parents=True, exist_ok=True)
+    if not output.resolve().is_relative_to((ROOT / "docs").resolve()):
+        raise ValueError("new benchmark outputs must be inside docs/")
+    output.mkdir(parents=True, exist_ok=False)
     rows, seen = [], set()
     fixture = ROOT / config["fixtures"]
     for row in read_jsonl(fixture):
@@ -46,10 +52,10 @@ def main():
         if len(rows) == config["max_documents"]:
             break
     workload = output / "workload.jsonl"
-    workload.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows))
+    workload.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8", newline="\n")
     model = ROOT / config["model"]
     env = dict(os.environ, RAYON_NUM_THREADS="1", TOKENIZERS_PARALLELISM="false", OMP_NUM_THREADS="1")
-    manifest = {"schema_version": 1, "created_utc": datetime.now(timezone.utc).isoformat(),
+    manifest = {"schema_version": 1, "source": source_snapshot(), "created_utc": datetime.now(timezone.utc).isoformat(),
                 "source_commit": command(["git", "rev-parse", "HEAD"]), "source_dirty": bool(command(["git", "status", "--porcelain", "--untracked-files=no"])),
                 "model_file_sha256": sha(model), "fixture_sha256": sha(fixture), "workload_sha256": sha(workload),
                 "cargo_lock_sha256": sha(ROOT / "Cargo.lock"), "python_lock_sha256": sha(ROOT / "requirements.lock"),

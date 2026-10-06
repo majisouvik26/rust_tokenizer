@@ -16,3 +16,14 @@ thiserror.workspace = true
 [[bench]]
 name = "reference"
 harness = false
+
+[features]
+default = []
+parallel = ["dep:rayon"]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rayon = { workspace = true, optional = true }
+
+[[bench]]
+name = "optimization"
+harness = false

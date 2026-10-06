@@ -1,66 +1,55 @@
-# Rust BPE Tokenizer 
+# Rust BPE Tokenizer
 
-A lossless byte BPE tokenizer with deterministic training and a readable scan
-encoder. GPT-2 import preserves the original token IDs. This is the first
-reference milestone of the project; optimization and the hosted demo belong to later days.
+A lossless byte-level BPE tokenizer implemented in Rust, with GPT-2-compatible
+token IDs, deterministic training, and Python and WebAssembly bindings.
 
-## Quick start
-
-```bash
-cargo test --workspace --locked
-cargo run --release --locked -p bpe-cli -- train \
-  --input data/toy.jsonl --pretokenizer raw --vocab-size 258 --out model.json
-cargo run --release --locked -p bpe-cli -- encode --model model.json --text "aaabbb"
-cargo run --release --locked -p bpe-cli -- inspect --model model.json
-printf '[256,97,257,98]' | cargo run --release --locked -p bpe-cli -- decode --model model.json
-```
-
-The toy encodes to `[256,97,257,98]` and decodes to `aaabbb`. Encoding accepts
-`--input text.txt`, `--input records.jsonl --jsonl`, or stdin. Decoding accepts a
-JSON ID array from `--ids-file ids.json` or stdin and writes the exact text
-without adding a newline. Training records are JSONL objects `{"text":"..."}`;
-each record is independent. Empty/multilingual text, whitespace, NUL, and literal
-`</w>` are preserved.
-
-## GPT-2
-
-The archive includes the pinned GPT-2 model, source artifacts, and 10,000 frozen
-fixtures. Regeneration requires Python baseline dependencies:
+The core provides reference and heap encoders, reference and incremental
+trainers, reusable buffers, optional bounded caching, and ordered native batch
+parallelism. Merge traces expose the actual ranked operations. Automatic backend
+selection uses the reference scan unless an explicit byte threshold is supplied.
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --require-hashes -r requirements.lock
-python scripts/import_gpt2.py --out models/gpt2.json
-python scripts/generate_fixtures.py
-cargo run --release --locked -p bpe-cli -- encode --model models/gpt2.json --text "This is some text"
-python scripts/validate_s1.py
-python bench/run.py --config bench/configs/smoke.json
+cargo fmt --all
+python scripts/validate_project.py --rust-only --out docs/runs/native-validation
+python scripts/validate_project.py --out docs/runs/validation
 ```
 
-The GPT-2 example returns `[1212,318,617,2420]`. Specials are ordinary text by
-default; use `--special allow --allow-special '<|endoftext|>'` to recognize that
-token, or `--special reject` to reject recognized special strings.
+The full validator builds and installs a release Python wheel, checks frozen
+GPT-2 IDs across backends, checks deterministic training and batch behavior, and
+compiles WASM. Compilation alone does not establish browser runtime parity.
 
-The gate builds and installs a release Python wheel, checks the same 10,000
-cases from Python, builds WASM, runs formatting/clippy/tests, and trains a toy
-model in 20 fresh processes. The benchmark records native Rust plus Rust Python,
-tiktoken, and Hugging Face timings with frozen ID preflight. Results are bounded
-synthetic smoke measurements, with no speed thresholds or production claims.
+## Tokenize and train
+
+```bash
+cargo run --release --locked -p bpe-cli -- encode \
+  --model models/gpt2.json --backend heap --text "This is some text"
+cargo run --release --locked -p bpe-cli -- trace \
+  --model models/gpt2.json --backend heap --text "abcabc"
+```
+
+Training consumes independent JSONL records of the form `{"text":"..."}` and
+supports `--trainer reference` or `--trainer incremental`. Encoding accepts text,
+a file, stdin, or ordered JSONL batches. Decoding concatenates token bytes before
+validating UTF-8. Whitespace, Unicode, embedded NUL, and literal `</w>` are
+preserved. Special tokens are ordinary text by default, with explicit allow and
+reject policies; no BOS/EOS tokens are inserted automatically.
 
 ```python
 from rust_tokenizer import Tokenizer
+
 tokenizer = Tokenizer("models/gpt2.json")
-ids = tokenizer.encode("বাংলা ও हिन्दी")
+ids = tokenizer.encode("বাংলা ও हिन्दी", backend="heap")
 assert tokenizer.decode_bytes(ids) == "বাংলা ও हिन्दी".encode("utf-8")
+outputs = tokenizer.encode_batch(["hello", "", "world"], backend="heap", threads=2)
 ```
 
 ## Project map
 
 | Path | Purpose |
 | --- | --- |
-| `bpe/` | Validated model, preprocessing, special policy, scan encoder, trainer |
-| `bpe-cli/` | train / encode / decode / inspect; discovered CLI tests |
-| `bindings/` | Thin Python and single-threaded WASM adapters |
-| `scripts/` | Import, fixture generation, parity and reproducibility gates |
+| `bpe/` | Validated model, merge engines, trainers, batch API and correctness tests |
+| `bpe-cli/` | Train, encode, decode, inspect, trace and diagnostic profiling |
+| `bindings/` | Python and serial WebAssembly adapters over the same Rust core |
+| `scripts/` | Import, fixtures, compatibility checks and evidence collection |
+| `bench/` | Development workloads, ablations, profiling and training comparisons |
 | `fixtures/`, `models/` | Frozen IDs, preprocessing spans, hashes and GPT-2 sources |

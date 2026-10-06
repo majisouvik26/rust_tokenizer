@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "rust-tokenizer-baseline"
 version = "0.2.0"
 requires-python = ">=3.9"
-description = "Lossless deterministic Rust byte BPE reference tokenizer"
+description = "Lossless deterministic Rust byte BPE tokenizer"
 
 [tool.maturin]
 module-name = "rust_tokenizer"

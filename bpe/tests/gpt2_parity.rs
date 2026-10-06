@@ -1,4 +1,4 @@
-use bpe::{EncodeOptions, SpecialMode, Tokenizer};
+use bpe::{Backend, EncodeOptions, RuntimeConfig, SpecialMode, Tokenizer};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{fs, path::PathBuf};
@@ -32,6 +32,10 @@ fn ten_thousand_frozen_production_ids_and_preprocessing_spans() {
         tokenizer.model().sha256().unwrap(),
         manifest["model_file_sha256"].as_str().unwrap()
     );
+    let mut oracle = tokenizer.session(RuntimeConfig { reuse_buffers: false, ..Default::default() }).unwrap();
+    let mut heap = tokenizer.session(RuntimeConfig::default()).unwrap();
+    let mut cached = tokenizer.session(RuntimeConfig { cache_capacity: 64, cache_bytes: 4096,
+        heap_threshold: Some(16), ..Default::default() }).unwrap();
     let mut count = 0;
     for line in std::str::from_utf8(&bytes).unwrap().lines() {
         let f: Fixture = serde_json::from_str(line).unwrap();
@@ -42,6 +46,10 @@ fn ten_thousand_frozen_production_ids_and_preprocessing_spans() {
             f.case_id,
             f.text
         );
+        for (session, backend) in [(&mut oracle, Backend::Reference), (&mut heap, Backend::Heap), (&mut cached, Backend::Auto)] {
+            let options = EncodeOptions { backend, ..Default::default() };
+            assert_eq!(session.encode(&f.text, &options).unwrap(), f.ids, "backend {backend:?}, case {}", f.case_id);
+        }
         assert_eq!(
             tokenizer.decode_bytes(&f.ids).unwrap(),
             f.text.as_bytes(),
@@ -80,7 +88,10 @@ fn allowed_specials_match_both_production_libraries() {
         ..Default::default()
     };
     for f in fixtures {
-        assert_eq!(tokenizer.encode_with(&f.text, &options).unwrap(), f.ids);
+        for backend in [Backend::Reference, Backend::Heap, Backend::Auto] {
+            let options = EncodeOptions { backend, ..options.clone() };
+            assert_eq!(tokenizer.encode_with(&f.text, &options).unwrap(), f.ids);
+        }
         assert_eq!(tokenizer.decode_utf8(&f.ids).unwrap(), f.text);
     }
 }

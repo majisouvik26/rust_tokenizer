@@ -175,7 +175,7 @@ fn multilingual_and_seeded_unicode_roundtrips() {
 #[test]
 fn save_load_and_canonical_hash_are_stable() {
     let m = train(&["hello hello", "বাংলা বাংলা"], 300, Pretokenizer::gpt2());
-    let path = std::env::temp_dir().join(format!("bpe-day1-{}.json", std::process::id()));
+    let path = std::env::temp_dir().join(format!("bpe-model-{}.json", std::process::id()));
     m.save(&path).unwrap();
     let loaded = BpeModel::load(&path).unwrap();
     std::fs::remove_file(path).unwrap();
@@ -307,16 +307,9 @@ fn serial_batch_and_auto_preserve_order() {
             .map(|t| tokenizer.encode(t).unwrap())
             .collect::<Vec<_>>()
     );
-    assert!(matches!(
-        tokenizer.encode_with(
-            "",
-            &EncodeOptions {
-                backend: Backend::Heap,
-                ..Default::default()
-            }
-        ),
-        Err(TokenizerError::UnsupportedBackend(_))
-    ));
+    assert_eq!(tokenizer.encode_with("", &EncodeOptions {
+        backend: Backend::Heap, ..Default::default()
+    }).unwrap(), Vec::<u32>::new());
 }
 #[test]
 fn invalid_trainer_configuration_is_rejected() {

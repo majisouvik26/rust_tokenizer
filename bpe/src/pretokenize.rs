@@ -34,14 +34,17 @@ pub(crate) fn compile(config: &Pretokenizer) -> Result<Option<Regex>> {
 }
 
 pub(crate) fn spans(text: &str, regex: Option<&Regex>) -> Result<Vec<Range<usize>>> {
-    let Some(regex) = regex else {
-        return Ok(if text.is_empty() {
-            vec![]
-        } else {
-            std::iter::once(0..text.len()).collect()
-        });
-    };
     let mut spans = Vec::new();
+    spans_into(text, regex, &mut spans)?;
+    Ok(spans)
+}
+
+pub(crate) fn spans_into(text: &str, regex: Option<&Regex>, spans: &mut Vec<Range<usize>>) -> Result<()> {
+    spans.clear();
+    let Some(regex) = regex else {
+        if !text.is_empty() { spans.push(0..text.len()); }
+        return Ok(());
+    };
     let mut end = 0;
     for matched in regex.find_iter(text) {
         let matched = matched.map_err(|e| TokenizerError::Preprocessing(e.to_string()))?;
@@ -58,5 +61,5 @@ pub(crate) fn spans(text: &str, regex: Option<&Regex>) -> Result<Vec<Range<usize
             "pattern did not cover all input bytes".into(),
         ));
     }
-    Ok(spans)
+    Ok(())
 }

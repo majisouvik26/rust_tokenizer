@@ -20,6 +20,7 @@ thiserror = "=2.0.11"
 clap = { version = "=4.5.31", features = ["derive"] }
 pyo3 = { version = "=0.23.5", features = ["extension-module", "abi3-py39"] }
 wasm-bindgen = "=0.2.100"
+rayon = "=1.10.0"
 
 [profile.release]
 lto = false

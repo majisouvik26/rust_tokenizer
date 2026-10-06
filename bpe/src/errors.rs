@@ -12,10 +12,12 @@ pub enum TokenizerError {
     UnknownSpecial(String),
     #[error("recognized special token is forbidden: {0:?}")]
     DisallowedSpecial(String),
-    #[error("invalid training configuration: {0}")]
+    #[error("invalid configuration: {0}")]
     InvalidConfig(String),
-    #[error("unsupported backend {0}; Day 1 implements reference only")]
+    #[error("unsupported backend {0}")]
     UnsupportedBackend(String),
+    #[error("worker state was poisoned by a previous panic")]
+    WorkerState,
     #[error("preprocessing failed: {0}")]
     Preprocessing(String),
     #[error("invalid UTF-8 after concatenating token bytes: {0}")]

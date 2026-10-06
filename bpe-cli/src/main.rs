@@ -1,15 +1,16 @@
-use bpe::{Backend, BpeTrainer, EncodeOptions, Pretokenizer, SpecialMode, Tokenizer, TrainConfig};
-use clap::{Parser, Subcommand, ValueEnum};
+use bpe::{Backend, BpeTrainer, EncodeOptions, Pretokenizer, RuntimeConfig, SpecialMode, Tokenizer, TrainConfig, TrainerBackend};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::Deserialize;
 use std::{
     collections::BTreeSet,
     fs,
     io::{self, Read, Write},
     path::PathBuf,
+    time::Instant,
 };
 
 #[derive(Parser)]
-#[command(version, about = "Lossless byte BPE reference tokenizer")]
+#[command(version, about = "Lossless byte BPE tokenizer")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -31,6 +32,35 @@ enum Policy {
     Allow,
     Reject,
 }
+#[derive(Clone, Copy, ValueEnum)]
+enum Trainer { Reference, Incremental }
+#[derive(Args)]
+struct RuntimeArgs {
+    #[arg(long, default_value_t = 1)]
+    threads: usize,
+    /// Auto uses the heap for pre-tokens at least this many UTF-8 bytes long.
+    #[arg(long)]
+    heap_threshold: Option<usize>,
+    /// Per-worker FIFO cache entries; zero disables caching.
+    #[arg(long, default_value_t = 0)]
+    cache_capacity: usize,
+    #[arg(long, default_value_t = 8388608)]
+    cache_bytes: usize,
+    /// Ablation: allocate fresh merge buffers for every pre-token.
+    #[arg(long)]
+    no_reuse_buffers: bool,
+}
+impl RuntimeArgs {
+    fn config(&self) -> RuntimeConfig {
+        RuntimeConfig { heap_threshold: self.heap_threshold, cache_capacity: self.cache_capacity,
+            cache_bytes: self.cache_bytes, reuse_buffers: !self.no_reuse_buffers, ..Default::default() }
+    }
+}
+impl From<Engine> for Backend {
+    fn from(engine: Engine) -> Self {
+        match engine { Engine::Reference => Self::Reference, Engine::Auto => Self::Auto, Engine::Heap => Self::Heap }
+    }
+}
 #[derive(Subcommand)]
 enum Command {
     Train {
@@ -45,6 +75,8 @@ enum Command {
         pretokenizer: Pre,
         #[arg(long)]
         out: PathBuf,
+        #[arg(long, value_enum, default_value_t = Trainer::Reference)]
+        trainer: Trainer,
     },
     Encode {
         #[arg(long)]
@@ -63,6 +95,28 @@ enum Command {
         /// Repeat for each allowed special. Requires --special allow.
         #[arg(long = "allow-special", requires = "special")]
         allow_special: Vec<String>,
+        #[command(flatten)]
+        runtime: RuntimeArgs,
+    },
+    /// Output the actual merge events with absolute UTF-8 byte offsets.
+    Trace {
+        #[arg(long)]
+        model: PathBuf,
+        #[arg(long)]
+        text: String,
+        #[arg(long, value_enum, default_value_t = Engine::Reference)]
+        backend: Engine,
+        #[arg(long)]
+        heap_threshold: Option<usize>,
+    },
+    /// Diagnostic phase timings on ordinary text; not a throughput benchmark.
+    Profile {
+        #[arg(long)]
+        model: PathBuf,
+        #[arg(long)]
+        input: PathBuf,
+        #[arg(long, value_enum, default_value_t = Engine::Reference)]
+        backend: Engine,
     },
     Decode {
         #[arg(long)]
@@ -112,22 +166,29 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             min_frequency,
             pretokenizer,
             out,
+            trainer,
         } => {
             let texts = records(&read(Some(&input))?)?;
             let pretokenizer = match pretokenizer {
                 Pre::Raw => Pretokenizer::Raw,
                 Pre::Gpt2 => Pretokenizer::gpt2(),
             };
-            let model = BpeTrainer::new(TrainConfig {
+            let start = Instant::now();
+            let (model, report) = BpeTrainer::new(TrainConfig {
                 vocab_size,
                 min_frequency,
                 pretokenizer,
             })
-            .train(&texts)?;
+            .train_with_report(&texts, match trainer { Trainer::Reference => TrainerBackend::Reference, Trainer::Incremental => TrainerBackend::Incremental })?;
+            let training_seconds = start.elapsed().as_secs_f64();
             model.save(&out)?;
+            let peak_rss_bytes = fs::read_to_string("/proc/self/status").ok().and_then(|status| {
+                status.lines().find(|line| line.starts_with("VmHWM:")).and_then(|line| line.split_whitespace().nth(1))
+                    .and_then(|value| value.parse::<u64>().ok()).map(|kb| kb * 1024)
+            });
             println!(
                 "{}",
-                serde_json::json!({"vocab_size":model.vocab_size(), "merges":model.merges().len(), "model_sha256":model.sha256()?, "out":out})
+                serde_json::json!({"vocab_size":model.vocab_size(), "merges":model.merges().len(), "model_sha256":model.sha256()?, "out":out, "training_seconds":training_seconds, "training_report":report, "peak_rss_bytes":peak_rss_bytes})
             );
         }
         Command::Encode {
@@ -138,17 +199,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             backend,
             special,
             allow_special,
+            runtime,
         } => {
             if !matches!(special, Policy::Allow) && !allow_special.is_empty() {
                 return Err("--allow-special requires --special allow".into());
             }
             let tokenizer = Tokenizer::load(model)?;
             let options = EncodeOptions {
-                backend: match backend {
-                    Engine::Reference => Backend::Reference,
-                    Engine::Auto => Backend::Auto,
-                    Engine::Heap => Backend::Heap,
-                },
+                backend: backend.into(),
                 special: match special {
                     Policy::Ordinary => SpecialMode::Ordinary,
                     Policy::Reject => SpecialMode::Reject,
@@ -162,15 +220,26 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 None => read(input.as_ref())?,
             };
             if jsonl {
-                for ids in tokenizer.encode_batch(&records(&input)?, &options)? {
+                let mut encoder = tokenizer.batch_encoder(runtime.threads, runtime.config())?;
+                for ids in encoder.encode(&records(&input)?, &options)? {
                     println!("{}", serde_json::to_string(&ids)?);
                 }
             } else {
-                println!(
-                    "{}",
-                    serde_json::to_string(&tokenizer.encode_with(&input, &options)?)?
-                );
+                if runtime.threads != 1 { return Err("--threads requires --jsonl; one document remains serial".into()); }
+                let mut session = tokenizer.session(runtime.config())?;
+                println!("{}", serde_json::to_string(&session.encode(&input, &options)?)?);
             }
+        }
+        Command::Trace { model, text, backend, heap_threshold } => {
+            let tokenizer = Tokenizer::load(model)?;
+            let options = EncodeOptions { backend: backend.into(), ..Default::default() };
+            let config = RuntimeConfig { heap_threshold, ..Default::default() };
+            println!("{}", serde_json::to_string(&tokenizer.trace(&text, &options, &config)?)?);
+        }
+        Command::Profile { model, input, backend } => {
+            let tokenizer = Tokenizer::load(model)?;
+            let text = read(Some(&input))?;
+            println!("{}", serde_json::to_string(&bpe::profile::measure(&tokenizer, &text, backend.into(), &RuntimeConfig::default())?)?);
         }
         Command::Decode {
             model,

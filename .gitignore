@@ -12,3 +12,11 @@ __pycache__/
 artifacts/
 docs/
 results//artifacts/
+
+# Local experiment evidence and reports
+/results/
+/docs/runs/
+/docs/reports/
+/docs/exports/
+*.log
+commands.txt
